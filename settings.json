@@ -1,0 +1,26 @@
+{
+    "server": {
+        "port": 8080,
+        "host": "localhost",
+        "maxHeaderBytes": 500000
+    },
+    "cron": {
+        "intervalSeconds": 60
+    },
+    "sqlite": {
+        "dsn": "file:sabertoot.db?_journal=WAL"
+    },
+    "storage": {
+        "localPath": "/public",
+        "publicURL": "//localhost:8080/public"
+    },
+    "accounts": {
+        "dustin": {
+            "twitter": {
+                "handle": "dustinmoris",
+                "token": "AAAAAAAAAAAAAAAAAAAAAEsLhwEAAAAALK%2Fxv1FALOYuqHg%2B1nYyRDSMGUc%3DGO1FLyLqYZq9bWG1doD1TV5G7gEOGaEGL8GP9ZGBaOeHh4VKT2"
+            },
+            "startDate": "2022-01-01T00:00:00Z"
+        }
+    }
+}
