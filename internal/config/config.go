@@ -8,8 +8,9 @@ import (
 )
 
 type Server struct {
-	Host           string `json:"host"`
 	Port           int    `json:"port"`
+	PublicHost     string `json:"publicHost"`
+	PublicBaseURL  string `json:"publicBaseURL"`
 	MaxHeaderBytes int    `json:"maxHeaderBytes"`
 }
 
@@ -31,6 +32,8 @@ type Twitter struct {
 }
 
 type AccountDetails struct {
+	Name      string    `json:"name"`
+	Summary   string    `json:"summary"`
 	Twitter   *Twitter  `json:"twitter,omitempty"`
 	StartDate time.Time `json:"startDate"`
 }

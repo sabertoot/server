@@ -1,7 +1,8 @@
 {
     "server": {
         "port": 8080,
-        "host": "localhost",
+        "publicHost": "localhost",
+        "publicBaseURL": "http://localhost:8080",
         "maxHeaderBytes": 500000
     },
     "cron": {
@@ -16,6 +17,8 @@
     },
     "accounts": {
         "dustin": {
+            "name": "Dustin Moris Gorski",
+            "summary": "Highly functioning organism that transforms caffeine into code.",
             "twitter": {
                 "handle": "dustinmoris",
                 "token": "AAAAAAAAAAAAAAAAAAAAAEsLhwEAAAAALK%2Fxv1FALOYuqHg%2B1nYyRDSMGUc%3DGO1FLyLqYZq9bWG1doD1TV5G7gEOGaEGL8GP9ZGBaOeHh4VKT2"
