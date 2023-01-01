@@ -1,7 +1,7 @@
 {
     "server": {
         "port": 8080,
-        "publicHost": "localhost",
+        "domain": "localhost",
         "publicBaseURL": "http://localhost:8080",
         "maxHeaderBytes": 500000
     },
@@ -15,15 +15,17 @@
         "localPath": "/public",
         "publicURL": "//localhost:8080/public"
     },
-    "accounts": {
-        "dustin": {
-            "name": "Dustin Moris Gorski",
+    "users": [
+        {
+            "id": 1,
+            "username": "dustin",
+            "fullName": "Dustin Moris Gorski",
             "summary": "Highly functioning organism that transforms caffeine into code.",
             "twitter": {
-                "handle": "dustinmoris",
+                "username": "dustinmoris",
                 "token": "AAAAAAAAAAAAAAAAAAAAAEsLhwEAAAAALK%2Fxv1FALOYuqHg%2B1nYyRDSMGUc%3DGO1FLyLqYZq9bWG1doD1TV5G7gEOGaEGL8GP9ZGBaOeHh4VKT2"
             },
             "startDate": "2022-01-01T00:00:00Z"
         }
-    }
+    ]
 }

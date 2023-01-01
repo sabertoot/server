@@ -4,34 +4,38 @@ import (
 	"fmt"
 )
 
-type ID string
+type Username string
 
-func (id ID) String() string {
-	return string(id)
+func (u Username) String() string {
+	return string(u)
 }
 
-func (id ID) IDPath() string {
-	return "/" + string(id)
+func (u Username) IDPath() string {
+	return "/users/" + string(u)
 }
 
-func (id ID) InboxPath() string {
-	return fmt.Sprintf("%s/inbox", id.IDPath())
+func (u Username) ProfilePath() string {
+	return "/@" + string(u)
 }
 
-func (id ID) OutboxPath() string {
-	return fmt.Sprintf("%s/outbox", id.IDPath())
+func (u Username) InboxPath() string {
+	return fmt.Sprintf("%s/inbox", u.IDPath())
 }
 
-func (id ID) FollowersPath() string {
-	return fmt.Sprintf("%s/followers", id.IDPath())
+func (u Username) OutboxPath() string {
+	return fmt.Sprintf("%s/outbox", u.IDPath())
 }
 
-func (id ID) FollowingPath() string {
-	return fmt.Sprintf("%s/following", id.IDPath())
+func (u Username) FollowersPath() string {
+	return fmt.Sprintf("%s/followers", u.IDPath())
 }
 
-func (id ID) LikedPath() string {
-	return fmt.Sprintf("%s/liked", id.IDPath())
+func (u Username) FollowingPath() string {
+	return fmt.Sprintf("%s/following", u.IDPath())
+}
+
+func (u Username) LikedPath() string {
+	return fmt.Sprintf("%s/liked", u.IDPath())
 }
 
 type Actor struct {
@@ -47,10 +51,11 @@ type Actor struct {
 	Followers         string `json:"followers"`
 	Following         string `json:"following"`
 	Liked             string `json:"liked"`
+	URL               string `json:"url"`
 }
 
 func NewActor(
-	id ID,
+	username Username,
 	name string,
 	summary string,
 	iconURL string,
@@ -58,15 +63,16 @@ func NewActor(
 	return &Actor{
 		Context:           "https://www.w3.org/ns/activitystreams",
 		Type:              "Person",
-		ID:                publicBaseURL + id.IDPath(),
-		PreferredUsername: id.String(),
+		ID:                publicBaseURL + username.IDPath(),
+		PreferredUsername: username.String(),
 		Name:              name,
 		Summary:           summary,
 		Icon:              iconURL,
-		Inbox:             publicBaseURL + id.InboxPath(),
-		Outbox:            publicBaseURL + id.OutboxPath(),
-		Followers:         publicBaseURL + id.FollowersPath(),
-		Following:         publicBaseURL + id.FollowingPath(),
-		Liked:             publicBaseURL + id.LikedPath(),
+		Inbox:             publicBaseURL + username.InboxPath(),
+		Outbox:            publicBaseURL + username.OutboxPath(),
+		Followers:         publicBaseURL + username.FollowersPath(),
+		Following:         publicBaseURL + username.FollowingPath(),
+		Liked:             publicBaseURL + username.LikedPath(),
+		URL:               publicBaseURL + username.ProfilePath(),
 	}
 }

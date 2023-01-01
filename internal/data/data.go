@@ -4,64 +4,93 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"github.com/sabertoot/server/internal/uid"
 )
 
-// tweets
-// ---
-// id
-// created_at
-// data
-
-// toots
-// ---
-// id
-// twitter_id
-// created_at
-// text_original
-// text_html
-// attachments
-
-// TEXT, NUMERIC, INTEGER, REAL, BLOB
-
-type Tweet struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"created_at"`
-	Handle    string `json:"handle"`
-	Data      string `json:"data"`
+type Toot struct {
+	ID           string `json:"id"`
+	UserID       int    `json:"user_id"`
+	CreatedAt    string `json:"created_at"`
+	TextOriginal string `json:"text_original"`
+	TextHTML     string `json:"text_html"`
+	SourceType   int    `json:"source_type"`
+	SourceID     string `json:"source_id"`
+	SourceData   string `json:"source_data"`
 }
 
+const (
+	tootsTable = "toots"
+)
+
 func InitTables(ctx context.Context, db *sql.DB) error {
-	statement, err := db.PrepareContext(ctx, "CREATE TABLE IF NOT EXISTS tweets (id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, handle TEXT NOT NULL, data TEXT NOT NULL)")
+	// SQLite supported data types:
+	// TEXT, NUMERIC, INTEGER, REAL, BLOB
+
+	statement, err := db.PrepareContext(ctx,
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s
+		(
+			id TEXT PRIMARY KEY,
+			user_id INTEGER NOT NULL,
+			created_at TEXT NOT NULL,
+			text_original TEXT NOT NULL,
+			text_html TEXT NOT NULL,
+			source_type INTEGER NOT NULL,
+			source_id TEXT NOT NULL,
+			source_data TEXT NOT NULL
+		)`, tootsTable))
 	if err != nil {
-		return fmt.Errorf("error preparing create statement for 'tweets' table: %w", err)
+		return fmt.Errorf("error preparing create statement for '%s' table: %w", tootsTable, err)
 	}
 
 	_, err = statement.ExecContext(ctx)
 	if err != nil {
-		return fmt.Errorf("error creating 'tweets' table: %w", err)
+		return fmt.Errorf("error creating '%s' table: %w", tootsTable, err)
 	}
 
 	return nil
 }
 
-func SaveTweet(ctx context.Context, db *sql.DB, tweet *Tweet) error {
-	statement, err := db.PrepareContext(ctx, "INSERT INTO tweets (id, created_at, handle, data) VALUES (?, ?, ?, ?)")
+func SaveToot(ctx context.Context, db *sql.DB, t *Toot) error {
+	statement, err := db.PrepareContext(ctx,
+		fmt.Sprintf(`INSERT INTO %s
+		(
+			id,
+			user_id,
+			created_at,
+			text_original,
+			text_html,
+			source_type,
+			source_id,
+			source_data
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, tootsTable))
 	if err != nil {
-		return fmt.Errorf("error preparing insert statement for 'tweets' table: %w", err)
+		return fmt.Errorf("error preparing insert statement for '%s' table: %w", tootsTable, err)
 	}
 
-	_, err = statement.ExecContext(ctx, tweet.ID, tweet.CreatedAt, tweet.Handle, tweet.Data)
+	_, err = statement.ExecContext(
+		ctx,
+		t.ID,
+		t.UserID,
+		t.CreatedAt,
+		t.TextOriginal,
+		t.TextHTML,
+		t.SourceType,
+		t.SourceID,
+		t.SourceData)
 	if err != nil {
-		return fmt.Errorf("error inserting into 'tweets' table: %w", err)
+		return fmt.Errorf("error inserting into '%s' table: %w", tootsTable, err)
 	}
 
 	return nil
 }
 
-func LatestTweetID(ctx context.Context, db *sql.DB, handle string) (string, error) {
+func LatestTweetID(ctx context.Context, db *sql.DB, userID uid.UserID) (string, error) {
 	var id string
-	err := db.QueryRowContext(
-		ctx, "SELECT id FROM tweets WHERE handle=? ORDER BY id DESC LIMIT 1", handle).Scan(&id)
+	err := db.QueryRowContext(ctx, fmt.Sprintf(
+		"SELECT source_id FROM %s WHERE source_type=? AND user_id=? ORDER BY id DESC LIMIT 1",
+		tootsTable), uid.Twitter, userID).Scan(&id)
 
 	if err == sql.ErrNoRows {
 		return "", nil

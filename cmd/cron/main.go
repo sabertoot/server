@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/sabertoot/server/internal/config"
 	"github.com/sabertoot/server/internal/data"
 	"github.com/sabertoot/server/internal/plog"
 	"github.com/sabertoot/server/internal/twitter"
+	"github.com/sabertoot/server/internal/uid"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -96,7 +98,7 @@ func mustGet[T any](m map[string]any, key string) (T, error) {
 	return parsed, nil
 }
 
-func parseTweet(tweet map[string]any) (*data.Tweet, error) {
+func parseTweet(userID uid.UserID, tweet map[string]any) (*data.Toot, error) {
 	buffer, err := json.Marshal(tweet)
 	if err != nil {
 		return nil, fmt.Errorf("error serialising tweet data: %w", err)
@@ -112,18 +114,36 @@ func parseTweet(tweet map[string]any) (*data.Tweet, error) {
 		return nil, fmt.Errorf("Error retrieving `created_at` value: %w", err)
 	}
 
-	return &data.Tweet{
-		ID:        id,
-		CreatedAt: createdAt,
-		Data:      string(buffer),
+	text, err := mustGet[string](tweet, "text")
+	if err != nil {
+		return nil, fmt.Errorf("Error retrieving `text` value: %w", err)
+	}
+
+	sourceID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing tweet ID: %w", err)
+	}
+
+	tootID := uid.New(userID, uid.Twitter, sourceID)
+
+	return &data.Toot{
+		ID:           tootID.String(),
+		UserID:       userID.Int(),
+		CreatedAt:    createdAt,
+		TextOriginal: text,
+		TextHTML:     "ToDo",
+		SourceType:   uid.Twitter.Int(),
+		SourceID:     id,
+		SourceData:   string(buffer),
 	}, nil
 }
 
 func harvest(ctx context.Context, db *sql.DB, settings *config.Settings) {
-	for _, account := range settings.Accounts {
-		plog.Infof("Collecting tweets for %s", account.Twitter.Handle)
+	for _, user := range settings.Users {
+		plog.Infof("Collecting tweets for %s", user.Twitter.Username)
 
-		sinceId, err := data.LatestTweetID(ctx, db, account.Twitter.Handle)
+		userID := user.UserID()
+		sinceId, err := data.LatestTweetID(ctx, db, userID)
 		if err != nil {
 			plog.Error(err.Error())
 			continue
@@ -134,9 +154,9 @@ func harvest(ctx context.Context, db *sql.DB, settings *config.Settings) {
 		for {
 			result, err := twitter.GetTweetsByUser(
 				ctx,
-				account.Twitter.Handle,
-				account.Twitter.Token,
-				account.StartDate,
+				user.Twitter.Username,
+				user.Twitter.Token,
+				user.StartDate,
 				sinceId,
 				nextToken)
 			if err != nil {
@@ -168,30 +188,19 @@ func harvest(ctx context.Context, db *sql.DB, settings *config.Settings) {
 			}
 
 			for _, elem := range elements {
-				tweet, err := parseTweet(elem.(map[string]any))
+				toot, err := parseTweet(userID, elem.(map[string]any))
 				if err != nil {
 					plog.Error(err.Error())
 					continue
 				}
 
-				tweet.Handle = account.Twitter.Handle
-
-				err = data.SaveTweet(ctx, db, tweet)
+				err = data.SaveToot(ctx, db, toot)
 				if err != nil {
-					plog.Errorf("Error saving tweet: %s", err.Error())
+					plog.Errorf("Error saving toot: %s", err.Error())
 					continue
 				}
-				plog.Infof("Tweet saved: %s", tweet.ID)
+				plog.Infof("Toot saved: %s", toot.ID)
 			}
-
-			// toots
-			// ---
-			// id
-			// twitter_id
-			// created_at
-			// text_original
-			// text_html
-			// attachments
 
 			tokenValue, ok := tryGet[string](meta, "next_token")
 			if !ok {
