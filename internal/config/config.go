@@ -28,6 +28,26 @@ type SQLite struct {
 	DSN string `json:"dsn"`
 }
 
+type Storage struct {
+	Path string `json:"path"`
+}
+
+func (s *Storage) ProfileImageDirectory() string {
+	return fmt.Sprintf("%s/profile_images", s.Path)
+}
+
+func (s *Storage) ProfileImageFullFilePath(userID uid.UserID, ext string) string {
+	return fmt.Sprintf(
+		"%s/%d%s",
+		s.ProfileImageDirectory(),
+		userID.Int(),
+		ext)
+}
+
+func (s *Storage) ProfileImageRelativeURLPath(userID uid.UserID) string {
+	return fmt.Sprintf("/profile_images/%d", userID)
+}
+
 type Twitter struct {
 	Username string `json:"username"`
 	Token    string `json:"token"`
@@ -38,7 +58,7 @@ type User struct {
 	Username  string    `json:"username"`
 	FullName  string    `json:"fullName"`
 	Summary   string    `json:"summary"`
-	Twitter   *Twitter  `json:"twitter"`
+	Twitter   *Twitter  `json:"twitter,omitempty"`
 	StartDate time.Time `json:"startDate"`
 }
 
@@ -47,10 +67,11 @@ func (u *User) UserID() uid.UserID {
 }
 
 type Settings struct {
-	Server *Server `json:"server,omitempty"`
-	Cron   *Cron   `json:"cron,omitempty"`
-	SQLite *SQLite `json:"sqlite,omitempty"`
-	Users  []User  `json:"users,omitempty"`
+	Server  *Server  `json:"server,omitempty"`
+	Cron    *Cron    `json:"cron,omitempty"`
+	SQLite  *SQLite  `json:"sqlite,omitempty"`
+	Storage *Storage `json:"storage,omitempty"`
+	Users   []User   `json:"users,omitempty"`
 }
 
 func (s *Settings) Validate() (bool, error) {

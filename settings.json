@@ -12,8 +12,7 @@
         "dsn": "file:sabertoot.db?_journal=WAL"
     },
     "storage": {
-        "localPath": "/public",
-        "publicURL": "//localhost:8080/public"
+        "path": "/Users/dustingorski/Repos/GitHub/sabertoot/server/.public"
     },
     "users": [
         {

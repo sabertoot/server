@@ -5,11 +5,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sabertoot/server/internal/config"
 	"github.com/sabertoot/server/internal/data"
+	"github.com/sabertoot/server/internal/download"
 	"github.com/sabertoot/server/internal/plog"
 	"github.com/sabertoot/server/internal/twitter"
 	"github.com/sabertoot/server/internal/uid"
@@ -32,12 +36,12 @@ func main() {
 	plog.Infof("Scheduled task interval: %d seconds", settings.Cron.IntervalSeconds)
 
 	plog.Debug("Starting scheduled task...")
-	go scheduledTask(ctx, settings)
+	go harvest(ctx, settings)
 
 	select {}
 }
 
-func scheduledTask(ctx context.Context, settings *config.Settings) {
+func harvest(ctx context.Context, settings *config.Settings) {
 	plog.Infof("Initialising SQLite database: %s", settings.SQLite.DSN)
 
 	db, err := sql.Open("sqlite3", settings.SQLite.DSN)
@@ -62,7 +66,7 @@ func scheduledTask(ctx context.Context, settings *config.Settings) {
 
 	plog.Info("Successfully initialised SQL tables.")
 
-	harvest(ctx, db, settings)
+	harvestTweets(ctx, db, settings)
 
 	interval := settings.Cron.Interval()
 	for {
@@ -70,7 +74,7 @@ func scheduledTask(ctx context.Context, settings *config.Settings) {
 		case <-ctx.Done():
 			plog.Info("Scheduled task stopped.")
 		case <-time.After(interval):
-			harvest(ctx, db, settings)
+			harvestTweets(ctx, db, settings)
 		}
 	}
 }
@@ -138,7 +142,7 @@ func parseTweet(userID uid.UserID, tweet map[string]any) (*data.Toot, error) {
 	}, nil
 }
 
-func harvest(ctx context.Context, db *sql.DB, settings *config.Settings) {
+func harvestTweets(ctx context.Context, db *sql.DB, settings *config.Settings) {
 	for _, user := range settings.Users {
 		plog.Infof("Collecting tweets for %s", user.Twitter.Username)
 
@@ -164,6 +168,8 @@ func harvest(ctx context.Context, db *sql.DB, settings *config.Settings) {
 				continue
 			}
 
+			// Parse and check meta data:
+			// ---
 			meta, err := mustGet[map[string]any](result, "meta")
 			if err != nil {
 				plog.Error(err.Error())
@@ -181,6 +187,8 @@ func harvest(ctx context.Context, db *sql.DB, settings *config.Settings) {
 				break
 			}
 
+			// Parse and save tweets:
+			// ---
 			elements, err := mustGet[[]any](result, "data")
 			if err != nil {
 				plog.Error(err.Error())
@@ -202,6 +210,71 @@ func harvest(ctx context.Context, db *sql.DB, settings *config.Settings) {
 				plog.Infof("Toot saved: %s", toot.ID)
 			}
 
+			// Parse user data:
+			// ---
+			includes, err := mustGet[map[string]any](result, "includes")
+			if err != nil {
+				plog.Error(err.Error())
+				break
+			}
+
+			users, err := mustGet[[]any](includes, "users")
+			if err != nil {
+				plog.Error(err.Error())
+				break
+			}
+
+			// Find all profile images:
+			// ---
+			profileImageURLs := make(map[string]string)
+			for _, elem := range users {
+				twitterUser := elem.(map[string]any)
+
+				profileImageURL, ok := tryGet[string](twitterUser, "profile_image_url")
+				if !ok || len(profileImageURL) == 0 {
+					continue
+				}
+
+				username, ok := tryGet[string](twitterUser, "username")
+				if !ok {
+					continue
+				}
+
+				if strings.Contains(profileImageURL, "_normal.") {
+					profileImageURL = strings.Replace(profileImageURL, "_normal", "", 1)
+				}
+
+				profileImageURLs[username] = profileImageURL
+			}
+
+			// Download profile images:
+			// ---
+			for _, user := range settings.Users {
+				if profileImageURL, ok := profileImageURLs[user.Twitter.Username]; ok {
+					plog.Debugf("Profile image found for user %s: %s", user.Username, profileImageURL)
+
+					ext := ".jpg"
+					parsedURL, err := url.Parse(profileImageURL)
+					if err == nil {
+						actualExt := path.Ext(parsedURL.Path)
+						if len(actualExt) > 0 {
+							ext = actualExt
+						}
+					}
+
+					profileImagePath := settings.Storage.ProfileImageFullFilePath(user.UserID(), ext)
+					err = download.File(ctx, profileImageURL, profileImagePath)
+					if err != nil {
+						plog.Error(err.Error())
+						continue
+					}
+
+					plog.Infof("Profile image downloaded for user %s: %s", user.Username, profileImagePath)
+				}
+			}
+
+			// Get token to next page:
+			// ---
 			tokenValue, ok := tryGet[string](meta, "next_token")
 			if !ok {
 				plog.Debug("No more tweets to collect.")

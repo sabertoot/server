@@ -21,9 +21,7 @@ func main() {
 	}
 
 	plog.Debug("Initialising handler...")
-	webHandler := &handler.Handler{
-		Settings: settings,
-	}
+	webHandler := handler.New(settings)
 
 	plog.Debug("Creating server...")
 	httpServer := &http.Server{

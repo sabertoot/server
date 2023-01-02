@@ -33,6 +33,10 @@ func (u UserID) Int() int {
 	return int(u)
 }
 
+func (u UserID) String() string {
+	return strconv.Itoa(u.Int())
+}
+
 // Deterministic global unique identifier for an object.
 // It will be a combination of user ID, object source and object ID.
 type UID string

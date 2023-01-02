@@ -17,3 +17,5 @@
 # SQLite
 *.db
 *.db-*
+
+.public
