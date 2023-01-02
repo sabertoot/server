@@ -18,4 +18,8 @@
 *.db
 *.db-*
 
-.public
+# Local data directory
+.data
+
+# Private settings
+settings.json

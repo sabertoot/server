@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sabertoot/server/cmd/server/handler"
+	"github.com/sabertoot/server/cmd/web/handler"
 	"github.com/sabertoot/server/internal/config"
 	"github.com/sabertoot/server/internal/plog"
 )

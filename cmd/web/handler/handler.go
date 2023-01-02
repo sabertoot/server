@@ -212,6 +212,12 @@ func (h *Handler) serveOutbox(
 		h.error405(w, r)
 		return
 	}
+
+	// outbox: Root
+	// outbox?after=0: Page 1
+	// outbox?after=epoch: Page X
+
+	// r.URL.Query()
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
