@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+const (
+	activityStreamsContext = "https://www.w3.org/ns/activitystreams"
+)
+
 type Username string
 
 func (u Username) String() string {
@@ -61,7 +65,7 @@ func NewActor(
 	iconURL string,
 	publicBaseURL string) *Actor {
 	return &Actor{
-		Context:           "https://www.w3.org/ns/activitystreams",
+		Context:           activityStreamsContext,
 		Type:              "Person",
 		ID:                publicBaseURL + username.IDPath(),
 		PreferredUsername: username.String(),
@@ -74,5 +78,29 @@ func NewActor(
 		Following:         publicBaseURL + username.FollowingPath(),
 		Liked:             publicBaseURL + username.LikedPath(),
 		URL:               publicBaseURL + username.ProfilePath(),
+	}
+}
+
+type OrderedCollection struct {
+	Context    string `json:"@context"`
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	TotalItems int    `json:"totalItems"`
+	First      string `json:"first"`
+	Last       string `json:"last"`
+}
+
+func NewOrderedCollection(
+	id string,
+	totalItems int,
+	first string,
+	last string) *OrderedCollection {
+	return &OrderedCollection{
+		Context:    activityStreamsContext,
+		Type:       "OrderedCollection",
+		ID:         id,
+		TotalItems: totalItems,
+		First:      first,
+		Last:       last,
 	}
 }

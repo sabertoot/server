@@ -59,14 +59,15 @@ func harvest(ctx context.Context, settings *config.Settings) {
 	}
 	plog.Debugf("SQLite version: %s", version)
 
-	if err = data.InitTables(ctx, db); err != nil {
+	dataService := data.NewService(db)
+	if err = dataService.InitTables(ctx); err != nil {
 		plog.Fatal(err.Error())
 		return
 	}
 
 	plog.Info("Successfully initialised SQL tables.")
 
-	harvestTweets(ctx, db, settings)
+	harvestTweets(ctx, dataService, settings)
 
 	interval := settings.Cron.Interval()
 	for {
@@ -74,7 +75,7 @@ func harvest(ctx context.Context, settings *config.Settings) {
 		case <-ctx.Done():
 			plog.Info("Scheduled task stopped.")
 		case <-time.After(interval):
-			harvestTweets(ctx, db, settings)
+			harvestTweets(ctx, dataService, settings)
 		}
 	}
 }
@@ -142,12 +143,12 @@ func parseTweet(userID uid.UserID, tweet map[string]any) (*data.Toot, error) {
 	}, nil
 }
 
-func harvestTweets(ctx context.Context, db *sql.DB, settings *config.Settings) {
+func harvestTweets(ctx context.Context, dataService *data.Service, settings *config.Settings) {
 	for _, user := range settings.Users {
 		plog.Infof("Collecting tweets for %s", user.Twitter.Username)
 
 		userID := user.UserID()
-		sinceId, err := data.LatestTweetID(ctx, db, userID)
+		sinceId, err := dataService.LatestTweetID(ctx, userID)
 		if err != nil {
 			plog.Error(err.Error())
 			continue
@@ -202,7 +203,7 @@ func harvestTweets(ctx context.Context, db *sql.DB, settings *config.Settings) {
 					continue
 				}
 
-				err = data.SaveToot(ctx, db, toot)
+				err = dataService.SaveToot(ctx, toot)
 				if err != nil {
 					plog.Errorf("Error saving toot: %s", err.Error())
 					continue

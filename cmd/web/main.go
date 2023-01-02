@@ -1,16 +1,22 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/sabertoot/server/cmd/web/handler"
 	"github.com/sabertoot/server/internal/config"
+	"github.com/sabertoot/server/internal/data"
 	"github.com/sabertoot/server/internal/plog"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
+	ctx := context.Background()
 	plog.Info("Sabertoot server starting...")
 
 	plog.Debug("Loading settings...")
@@ -20,8 +26,30 @@ func main() {
 		return
 	}
 
+	plog.Infof("Initialising SQLite database: %s", settings.SQLite.DSN)
+	db, err := sql.Open("sqlite3", settings.SQLite.DSN)
+	if err != nil {
+		plog.Fatal(err.Error())
+		return
+	}
+	defer db.Close()
+
+	var version string
+	err = db.QueryRow("SELECT SQLITE_VERSION()").Scan(&version)
+	if err != nil {
+		plog.Fatal(err.Error())
+		return
+	}
+	plog.Debugf("SQLite version: %s", version)
+
+	dataService := data.NewService(db)
+	if err = dataService.InitTables(ctx); err != nil {
+		plog.Fatal(err.Error())
+		return
+	}
+
 	plog.Debug("Initialising handler...")
-	webHandler := handler.New(settings)
+	webHandler := handler.New(settings, dataService)
 
 	plog.Debug("Creating server...")
 	httpServer := &http.Server{

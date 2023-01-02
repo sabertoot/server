@@ -8,6 +8,16 @@ import (
 	"github.com/sabertoot/server/internal/uid"
 )
 
+type Service struct {
+	db *sql.DB
+}
+
+func NewService(db *sql.DB) *Service {
+	return &Service{
+		db: db,
+	}
+}
+
 type Toot struct {
 	ID           string `json:"id"`
 	UserID       int    `json:"user_id"`
@@ -23,11 +33,11 @@ const (
 	tootsTable = "toots"
 )
 
-func InitTables(ctx context.Context, db *sql.DB) error {
+func (svc *Service) InitTables(ctx context.Context) error {
 	// SQLite supported data types:
 	// TEXT, NUMERIC, INTEGER, REAL, BLOB
 
-	statement, err := db.PrepareContext(ctx,
+	statement, err := svc.db.PrepareContext(ctx,
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s
 		(
 			id TEXT PRIMARY KEY,
@@ -51,8 +61,8 @@ func InitTables(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func SaveToot(ctx context.Context, db *sql.DB, t *Toot) error {
-	statement, err := db.PrepareContext(ctx,
+func (svc *Service) SaveToot(ctx context.Context, t *Toot) error {
+	statement, err := svc.db.PrepareContext(ctx,
 		fmt.Sprintf(`INSERT INTO %s
 		(
 			id,
@@ -86,9 +96,9 @@ func SaveToot(ctx context.Context, db *sql.DB, t *Toot) error {
 	return nil
 }
 
-func LatestTweetID(ctx context.Context, db *sql.DB, userID uid.UserID) (string, error) {
+func (svc *Service) LatestTweetID(ctx context.Context, userID uid.UserID) (string, error) {
 	var id string
-	err := db.QueryRowContext(ctx, fmt.Sprintf(
+	err := svc.db.QueryRowContext(ctx, fmt.Sprintf(
 		"SELECT source_id FROM %s WHERE source_type=? AND user_id=? ORDER BY id DESC LIMIT 1",
 		tootsTable), uid.Twitter, userID).Scan(&id)
 
@@ -101,4 +111,17 @@ func LatestTweetID(ctx context.Context, db *sql.DB, userID uid.UserID) (string, 
 	}
 
 	return id, nil
+}
+
+func (svc *Service) TootCount(ctx context.Context, userID uid.UserID) (int, error) {
+	var count int
+	err := svc.db.QueryRowContext(ctx, fmt.Sprintf(
+		"SELECT COUNT(*) FROM %s WHERE user_id=?",
+		tootsTable), userID).Scan(&count)
+
+	if err != nil {
+		return 0, fmt.Errorf("error querying toot count: %w", err)
+	}
+
+	return count, nil
 }

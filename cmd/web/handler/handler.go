@@ -8,9 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sabertoot/server/internal/activitypub"
 	"github.com/sabertoot/server/internal/config"
+	"github.com/sabertoot/server/internal/data"
 	"github.com/sabertoot/server/internal/plog"
 )
 
@@ -24,12 +26,17 @@ const (
 )
 
 type Handler struct {
-	settings *config.Settings
+	settings    *config.Settings
+	dataService *data.Service
 }
 
-func New(settings *config.Settings) *Handler {
+func New(
+	settings *config.Settings,
+	dataService *data.Service,
+) *Handler {
 	return &Handler{
-		settings: settings,
+		settings:    settings,
+		dataService: dataService,
 	}
 }
 
@@ -206,6 +213,7 @@ func (h *Handler) serveProfileImage(
 func (h *Handler) serveOutbox(
 	w http.ResponseWriter,
 	r *http.Request,
+	username activitypub.Username,
 	user config.User,
 ) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -213,11 +221,38 @@ func (h *Handler) serveOutbox(
 		return
 	}
 
-	// outbox: Root
-	// outbox?after=0: Page 1
-	// outbox?after=epoch: Page X
+	query := r.URL.Query()
+	after := query.Get("after")
+	if len(after) > 0 {
+		// ToDo
+		// outbox?after=0: Page 1
+		// outbox?after=epoch: Page X
+		return
+	}
 
-	// r.URL.Query()
+	totalItems, err := h.dataService.TootCount(r.Context(), user.UserID())
+	if err != nil {
+		plog.Errorf("error getting toot count: %v", err)
+		h.error500(w, err)
+		return
+	}
+
+	// Let's create a Y9999 problem ;)
+	y9999 := time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+	maxEpoch := y9999.Unix()
+
+	id := h.settings.Server.PublicBaseURL + username.OutboxPath()
+	first := fmt.Sprintf("%s?after=0", id)
+	last := fmt.Sprintf("%s?before=%d", id, maxEpoch)
+
+	orderedCollection := activitypub.NewOrderedCollection(
+		id,
+		totalItems,
+		first,
+		last,
+	)
+
+	h.serveObject(w, orderedCollection)
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +271,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if r.URL.Path == username.OutboxPath() {
-			h.serveOutbox(w, r, user)
+			h.serveOutbox(w, r, username, user)
 			return
 		}
 
