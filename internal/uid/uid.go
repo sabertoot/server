@@ -29,20 +29,20 @@ const (
 // the idea of this project.
 type UserID uint8
 
-func (u UserID) Int() int {
-	return int(u)
+func (id UserID) Int() int {
+	return int(id)
 }
 
-func (u UserID) String() string {
-	return strconv.Itoa(u.Int())
+func (id UserID) String() string {
+	return strconv.Itoa(id.Int())
 }
 
-// Deterministic global unique identifier for an object.
-// It will be a combination of user ID, object source and object ID.
-type UID string
+// Deterministic global unique identifier for a toot.
+// It will be a combination of user ID, source type and source ID.
+type TootID string
 
-func (u UID) String() string {
-	return string(u)
+func (id TootID) String() string {
+	return string(id)
 }
 
 // New creates a new UID.
@@ -50,12 +50,12 @@ func New(
 	userID UserID,
 	sourceType SourceType,
 	sourceID uint64,
-) UID {
+) TootID {
 	// Format:
 	// First two characters: Base36 encoded user ID
 	// Next two characters: Base36 encoded source type
 	// Rest of the characters: Base36 encoded source ID (foreign ID)
-	return UID(fmt.Sprintf(
+	return TootID(fmt.Sprintf(
 		"%02s%02s%s",
 		strconv.FormatUint(uint64(userID), 36),
 		strconv.FormatUint(uint64(sourceType), 36),

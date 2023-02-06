@@ -44,26 +44,50 @@ func (s *Storage) ProfileImageFullFilePath(userID uid.UserID, ext string) string
 		ext)
 }
 
-func (s *Storage) ProfileImageRelativeURLPath(userID uid.UserID) string {
-	return fmt.Sprintf("/profile_images/%d", userID)
-}
-
 type Twitter struct {
 	Username string `json:"username"`
 	Token    string `json:"token"`
 }
 
 type User struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	FullName  string    `json:"fullName"`
-	Summary   string    `json:"summary"`
-	Twitter   *Twitter  `json:"twitter,omitempty"`
-	StartDate time.Time `json:"startDate"`
+	ID        uid.UserID `json:"id"`
+	Username  string     `json:"username"`
+	FullName  string     `json:"fullName"`
+	Summary   string     `json:"summary"`
+	Twitter   *Twitter   `json:"twitter,omitempty"`
+	StartDate time.Time  `json:"startDate"`
 }
 
-func (u *User) UserID() uid.UserID {
-	return uid.UserID(u.ID)
+func (u *User) IDPath() string {
+	return "/users/" + u.Username
+}
+
+func (u *User) ProfilePath() string {
+	return "/@" + u.Username
+}
+
+func (u *User) InboxPath() string {
+	return fmt.Sprintf("%s/inbox", u.IDPath())
+}
+
+func (u *User) OutboxPath() string {
+	return fmt.Sprintf("%s/outbox", u.IDPath())
+}
+
+func (u *User) FollowersPath() string {
+	return fmt.Sprintf("%s/followers", u.IDPath())
+}
+
+func (u *User) FollowingPath() string {
+	return fmt.Sprintf("%s/following", u.IDPath())
+}
+
+func (u *User) LikedPath() string {
+	return fmt.Sprintf("%s/liked", u.IDPath())
+}
+
+func (u *User) ProfileImagePath() string {
+	return fmt.Sprintf("/profile_images/%d", u.ID)
 }
 
 type Settings struct {
@@ -71,7 +95,7 @@ type Settings struct {
 	Cron    *Cron    `json:"cron,omitempty"`
 	SQLite  *SQLite  `json:"sqlite,omitempty"`
 	Storage *Storage `json:"storage,omitempty"`
-	Users   []User   `json:"users,omitempty"`
+	Users   []*User  `json:"users,omitempty"`
 }
 
 func (s *Settings) Validate() (bool, error) {

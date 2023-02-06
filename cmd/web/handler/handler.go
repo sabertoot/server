@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,20 +24,25 @@ const (
 	mediaTypeHTML     = "text/html"
 	mediaTypePNG      = "image/png"
 	mediaTypeJPEG     = "image/jpeg"
+
+	pageSize = 20
 )
 
 type Handler struct {
 	settings    *config.Settings
 	dataService *data.Service
+	pubFactory  *activitypub.Factory
 }
 
 func New(
 	settings *config.Settings,
 	dataService *data.Service,
+	pubFactory *activitypub.Factory,
 ) *Handler {
 	return &Handler{
 		settings:    settings,
 		dataService: dataService,
+		pubFactory:  pubFactory,
 	}
 }
 
@@ -101,12 +107,12 @@ func (h *Handler) serveWebFinger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := activitypub.Username(subject[:len(subject)-len(domainSuffix)])
+	username := subject[:len(subject)-len(domainSuffix)]
 	for _, user := range h.settings.Users {
-		if user.Username == username.String() {
+		if user.Username == username {
 
-			actorURL := h.settings.Server.PublicBaseURL + username.IDPath()
-			profileURL := h.settings.Server.PublicBaseURL + username.ProfilePath()
+			actorURL := h.settings.Server.PublicBaseURL + user.IDPath()
+			profileURL := h.settings.Server.PublicBaseURL + user.ProfilePath()
 
 			w.Header().Set("Content-Type", mediaTypeJRD)
 			w.WriteHeader(http.StatusOK)
@@ -143,28 +149,20 @@ func (h *Handler) serveObject(w http.ResponseWriter, obj any) {
 func (h *Handler) serveActor(
 	w http.ResponseWriter,
 	r *http.Request,
-	username activitypub.Username,
-	user config.User,
+	user *config.User,
 ) {
 	if r.Method != http.MethodGet {
 		h.error405(w, r)
 		return
 	}
-	profileImageURL :=
-		h.settings.Server.PublicBaseURL +
-			h.settings.Storage.ProfileImageRelativeURLPath(user.UserID())
-	h.serveObject(w, activitypub.NewActor(
-		username,
-		user.FullName,
-		user.Summary,
-		profileImageURL,
-		h.settings.Server.PublicBaseURL))
+
+	h.serveObject(w, h.pubFactory.NewActor(user))
 }
 
 func (h *Handler) serveProfileImage(
 	w http.ResponseWriter,
 	r *http.Request,
-	user config.User,
+	user *config.User,
 ) {
 	if r.Method != http.MethodGet {
 		h.error405(w, r)
@@ -187,7 +185,7 @@ func (h *Handler) serveProfileImage(
 		ext := filepath.Ext(entry.Name())
 		fileID := fileName[:len(fileName)-len(ext)]
 
-		if fileID == user.UserID().String() {
+		if fileID == user.ID.String() {
 			file, err := os.Open(filepath.Join(h.settings.Storage.ProfileImageDirectory(), fileName))
 			if err != nil {
 				plog.Errorf("Error opening profile image file: %v", err)
@@ -213,8 +211,7 @@ func (h *Handler) serveProfileImage(
 func (h *Handler) serveOutbox(
 	w http.ResponseWriter,
 	r *http.Request,
-	username activitypub.Username,
-	user config.User,
+	user *config.User,
 ) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		h.error405(w, r)
@@ -222,26 +219,54 @@ func (h *Handler) serveOutbox(
 	}
 
 	query := r.URL.Query()
+	before := query.Get("before")
 	after := query.Get("after")
-	if len(after) > 0 {
-		// ToDo
-		// outbox?after=0: Page 1
-		// outbox?after=epoch: Page X
+
+	if len(before) > 0 && len(after) > 0 {
+		h.error400(w, "Only the 'before' or 'after' query parameter may be set, not both")
 		return
 	}
 
-	totalItems, err := h.dataService.TootCount(r.Context(), user.UserID())
+	if len(before) > 0 {
+		// Query toots before the given timestamp
+		return
+	}
+
+	ctx := r.Context()
+
+	if len(after) > 0 {
+		after, err := strconv.ParseInt(after, 10, 64)
+		if err != nil {
+			h.error400(w, "The query parameter 'after' must be a valid int64 value")
+			return
+		}
+
+		_, err = h.dataService.Toots(ctx, user.ID, after, pageSize)
+		if err != nil {
+			plog.Errorf("error getting toots: %v", err)
+			h.error500(w, err)
+			return
+		}
+
+		// for _, toot := range toots {
+		// 	obj := activitypub.Object
+		// }
+
+		return
+	}
+
+	totalItems, err := h.dataService.TootCount(ctx, user.ID)
 	if err != nil {
 		plog.Errorf("error getting toot count: %v", err)
 		h.error500(w, err)
 		return
 	}
 
-	// Let's create a Y9999 problem ;)
-	y9999 := time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+	// Let's create a Y99k problem in memory of Jay-Z
+	y9999 := time.Date(99000, 12, 31, 23, 59, 59, 0, time.UTC)
 	maxEpoch := y9999.Unix()
 
-	id := h.settings.Server.PublicBaseURL + username.OutboxPath()
+	id := h.settings.Server.PublicBaseURL + user.OutboxPath()
 	first := fmt.Sprintf("%s?after=0", id)
 	last := fmt.Sprintf("%s?before=%d", id, maxEpoch)
 
@@ -263,19 +288,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, user := range h.settings.Users {
-		username := activitypub.Username(user.Username)
 
-		if r.URL.Path == username.IDPath() {
-			h.serveActor(w, r, username, user)
+		if r.URL.Path == user.IDPath() {
+			h.serveActor(w, r, user)
 			return
 		}
 
-		if r.URL.Path == username.OutboxPath() {
-			h.serveOutbox(w, r, username, user)
+		if r.URL.Path == user.OutboxPath() {
+			h.serveOutbox(w, r, user)
 			return
 		}
 
-		if r.URL.Path == h.settings.Storage.ProfileImageRelativeURLPath(user.UserID()) {
+		if r.URL.Path == user.ProfileImagePath() {
 			h.serveProfileImage(w, r, user)
 			return
 		}

@@ -114,9 +114,15 @@ func parseTweet(userID uid.UserID, tweet map[string]any) (*data.Toot, error) {
 		return nil, fmt.Errorf("error retrieving `id` value: %w", err)
 	}
 
-	createdAt, err := mustGet[string](tweet, "created_at")
+	createdAtValue, err := mustGet[string](tweet, "created_at")
 	if err != nil {
 		return nil, fmt.Errorf("Error retrieving `created_at` value: %w", err)
+	}
+	// 2023-01-03T13:57:22.000Z
+
+	createdAt, err := time.Parse(time.RFC3339, createdAtValue)
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing `created_at` value: %w", err)
 	}
 
 	text, err := mustGet[string](tweet, "text")
@@ -132,12 +138,12 @@ func parseTweet(userID uid.UserID, tweet map[string]any) (*data.Toot, error) {
 	tootID := uid.New(userID, uid.Twitter, sourceID)
 
 	return &data.Toot{
-		ID:           tootID.String(),
-		UserID:       userID.Int(),
+		ID:           tootID,
+		UserID:       userID,
 		CreatedAt:    createdAt,
 		TextOriginal: text,
 		TextHTML:     "ToDo",
-		SourceType:   uid.Twitter.Int(),
+		SourceType:   uid.Twitter,
 		SourceID:     id,
 		SourceData:   string(buffer),
 	}, nil
@@ -147,8 +153,7 @@ func harvestTweets(ctx context.Context, dataService *data.Service, settings *con
 	for _, user := range settings.Users {
 		plog.Infof("Collecting tweets for %s", user.Twitter.Username)
 
-		userID := user.UserID()
-		sinceId, err := dataService.LatestTweetID(ctx, userID)
+		sinceId, err := dataService.LatestTweetID(ctx, user.ID)
 		if err != nil {
 			plog.Error(err.Error())
 			continue
@@ -197,7 +202,7 @@ func harvestTweets(ctx context.Context, dataService *data.Service, settings *con
 			}
 
 			for _, elem := range elements {
-				toot, err := parseTweet(userID, elem.(map[string]any))
+				toot, err := parseTweet(user.ID, elem.(map[string]any))
 				if err != nil {
 					plog.Error(err.Error())
 					continue
@@ -263,7 +268,7 @@ func harvestTweets(ctx context.Context, dataService *data.Service, settings *con
 						}
 					}
 
-					profileImagePath := settings.Storage.ProfileImageFullFilePath(user.UserID(), ext)
+					profileImagePath := settings.Storage.ProfileImageFullFilePath(user.ID, ext)
 					err = download.File(ctx, profileImageURL, profileImagePath)
 					if err != nil {
 						plog.Error(err.Error())

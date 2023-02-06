@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/sabertoot/server/internal/uid"
 )
@@ -19,14 +20,14 @@ func NewService(db *sql.DB) *Service {
 }
 
 type Toot struct {
-	ID           string `json:"id"`
-	UserID       int    `json:"user_id"`
-	CreatedAt    string `json:"created_at"`
-	TextOriginal string `json:"text_original"`
-	TextHTML     string `json:"text_html"`
-	SourceType   int    `json:"source_type"`
-	SourceID     string `json:"source_id"`
-	SourceData   string `json:"source_data"`
+	ID           uid.TootID
+	UserID       uid.UserID
+	CreatedAt    time.Time
+	TextOriginal string
+	TextHTML     string
+	SourceType   uid.SourceType
+	SourceID     string
+	SourceData   string
 }
 
 const (
@@ -42,7 +43,7 @@ func (svc *Service) InitTables(ctx context.Context) error {
 		(
 			id TEXT PRIMARY KEY,
 			user_id INTEGER NOT NULL,
-			created_at TEXT NOT NULL,
+			created_at INTEGER NOT NULL,
 			text_original TEXT NOT NULL,
 			text_html TEXT NOT NULL,
 			source_type INTEGER NOT NULL,
@@ -81,12 +82,12 @@ func (svc *Service) SaveToot(ctx context.Context, t *Toot) error {
 
 	_, err = statement.ExecContext(
 		ctx,
-		t.ID,
-		t.UserID,
-		t.CreatedAt,
+		t.ID.String(),
+		t.UserID.Int(),
+		t.CreatedAt.Unix(),
 		t.TextOriginal,
 		t.TextHTML,
-		t.SourceType,
+		t.SourceType.Int(),
 		t.SourceID,
 		t.SourceData)
 	if err != nil {
@@ -100,7 +101,7 @@ func (svc *Service) LatestTweetID(ctx context.Context, userID uid.UserID) (strin
 	var id string
 	err := svc.db.QueryRowContext(ctx, fmt.Sprintf(
 		"SELECT source_id FROM %s WHERE source_type=? AND user_id=? ORDER BY id DESC LIMIT 1",
-		tootsTable), uid.Twitter, userID).Scan(&id)
+		tootsTable), uid.Twitter, userID.Int()).Scan(&id)
 
 	if err == sql.ErrNoRows {
 		return "", nil
@@ -117,11 +118,49 @@ func (svc *Service) TootCount(ctx context.Context, userID uid.UserID) (int, erro
 	var count int
 	err := svc.db.QueryRowContext(ctx, fmt.Sprintf(
 		"SELECT COUNT(*) FROM %s WHERE user_id=?",
-		tootsTable), userID).Scan(&count)
+		tootsTable), userID.Int()).Scan(&count)
 
 	if err != nil {
 		return 0, fmt.Errorf("error querying toot count: %w", err)
 	}
 
 	return count, nil
+}
+
+func (svc *Service) Toots(
+	ctx context.Context,
+	userID uid.UserID,
+	after int64,
+	limit int,
+) (
+	[]*Toot, error,
+) {
+	rows, err := svc.db.QueryContext(ctx, fmt.Sprintf(
+		"SELECT * FROM %s WHERE user_id=? AND created_at>? ORDER BY created_at DESC LIMIT ?",
+		tootsTable), userID.Int(), after, limit)
+	if err != nil {
+		return nil, fmt.Errorf("error querying toots: %w", err)
+	}
+	defer rows.Close()
+
+	toots := []*Toot{}
+	for rows.Next() {
+		t := &Toot{}
+		err := rows.Scan(
+			&t.ID,
+			&t.UserID,
+			&t.CreatedAt,
+			&t.TextOriginal,
+			&t.TextHTML,
+			&t.SourceType,
+			&t.SourceID,
+			&t.SourceData)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning toot: %w", err)
+		}
+
+		toots = append(toots, t)
+	}
+
+	return toots, nil
 }

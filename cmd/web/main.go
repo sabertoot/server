@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sabertoot/server/cmd/web/handler"
+	"github.com/sabertoot/server/internal/activitypub"
 	"github.com/sabertoot/server/internal/config"
 	"github.com/sabertoot/server/internal/data"
 	"github.com/sabertoot/server/internal/plog"
@@ -49,7 +50,8 @@ func main() {
 	}
 
 	plog.Debug("Initialising handler...")
-	webHandler := handler.New(settings, dataService)
+	pubFactory := activitypub.NewFactory(settings.Server.PublicBaseURL)
+	webHandler := handler.New(settings, dataService, pubFactory)
 
 	plog.Debug("Creating server...")
 	httpServer := &http.Server{
